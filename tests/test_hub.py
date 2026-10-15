@@ -499,3 +499,80 @@ def test_permit_join_requires_the_coordinator_started_state() -> None:
     from hub.drivers.zigbee import COORDINATOR_STARTED_STATE
 
     assert COORDINATOR_STARTED_STATE == 9
+
+
+def test_bring_up_starts_the_app_when_not_started() -> None:
+    """bring_up() must issue ZDO_STARTUP_FROM_APP when devState is 0.
+
+    A fresh serial connection leaves the stack at InitializedNotStarted and
+    reports the stale devState=7 from NVRAM. Nothing can form or join in that
+    state, so the driver must start the application rather than trust the
+    cached state.
+    """
+    from hub.drivers import zigbee as zb
+
+    sent: list[tuple[int, int]] = []
+
+    class Fake(zb.ZigbeeDriver):
+        def __init__(self) -> None:
+            super().__init__()
+            self._states = [7, 8, 9]
+
+        def device_state(self) -> int:
+            return self._states.pop(0) if self._states else 9
+
+        def request(self, mt, cmd, payload=b"", timeout=1.5, expect_areq=False):
+            sent.append((mt, cmd))
+            return b""
+
+    assert Fake().bring_up() == 9
+    assert (
+        zb.MT_ZDO,
+        zb.ZDO_STARTUP_FROM_APP,
+    ) in sent, f"bring_up did not start the app; sent={sent}"
+
+
+def test_bring_up_is_a_noop_when_already_started(monkeypatch) -> None:
+    """A coordinator already at state 9 must not be restarted."""
+    from hub.drivers import zigbee as zb
+
+    sent: list[tuple[int, int]] = []
+
+    class Fake(zb.ZigbeeDriver):
+        def device_state(self) -> int:
+            return 9
+
+        def request(self, mt, cmd, payload=b"", timeout=1.5, expect_areq=False):
+            sent.append((mt, cmd))
+            return b""
+
+    assert Fake().bring_up() == 9
+    assert sent == [], f"restarted an already-running coordinator: {sent}"
+
+
+# Real capture from fw 20250321 after a successful bring-up:
+#   UTIL_GET_DEVICE_INFO SRSP, 14-byte payload.
+_REAL_DEVICE_INFO = bytes.fromhex("00 c6 7e 29 39 00 4b 12 00 00 00 07 09 00")
+
+
+def test_device_state_reads_offset_12_not_11() -> None:
+    """devState is at payload offset 12; offset 11 is a stale byte.
+
+    The driver read offset 11 and so reported "Joined as router" (7) for a
+    coordinator that was actually StartedAsCoordinator (9), on every read.
+    This pins the offset against a real captured frame.
+    """
+    from hub.drivers import zigbee as zb
+
+    class Fake(zb.ZigbeeDriver):
+        def request(self, mt, cmd, payload=b"", timeout=1.5, expect_areq=False):
+            assert (mt, cmd) == (zb.MT_UTIL, zb.UTIL_GET_DEVICE_INFO)
+            return _REAL_DEVICE_INFO
+
+    assert Fake().device_state() == 9
+
+    info = Fake().coordinator_info()
+    assert info["state_code"] == 9
+    assert info["state"] == "Started as coordinator"
+    assert info["short_address"] == "0x0000"
+    assert info["ieee_address"] == "00:12:4b:00:39:29:7e:c6"

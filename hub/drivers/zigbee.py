@@ -117,15 +117,56 @@ class ZigbeeDriver(Driver):
         return self._ser
 
     def start(self) -> None:
-        """Open the port and confirm the coordinator answers."""
+        """Open the port, confirm the coordinator answers, and start the app.
+
+        Opening the port is not enough: a fresh serial connection leaves the
+        stack at InitializedNotStarted, where it reports devState=7 (the stale
+        value from NVRAM) and cannot form or accept anything. Starting the
+        application is what makes the network live, so do it here rather than
+        leaving the hub to report a dead coordinator.
+        """
         try:
             with self._lock:
                 self._connect()
             self.version()
+            self.bring_up()
             self.last_error = None
         except (serial.SerialException, OSError, DriverError) as exc:
             self.last_error = str(exc)
             raise DriverError(f"zigbee start failed: {exc}") from exc
+
+    def device_state(self) -> int:
+        """Return the coordinator's devState, or -1 if it cannot be read."""
+        try:
+            data = self.request(MT_UTIL, UTIL_GET_DEVICE_INFO, timeout=1.5)
+        except DriverError:
+            return -1
+        # status(1) | ieee(8) | nwk(2) | unk(1) | devstate(1) | ...
+        # devState is at offset 12, NOT 11. Offset 11 holds a stale/auxiliary
+        # byte (observed 7 on a fully-formed coordinator), so reading it makes a
+        # live network look like a router that never joined.
+        if len(data) < 13:
+            return -1
+        return data[12]
+
+    def bring_up(self) -> int:
+        """Start the application so the coordinator owns a live network.
+
+        Formation is not a separate command on this firmware - starting the app
+        is the formation. Returns the resulting devState.
+        """
+        state = self.device_state()
+        if state == COORDINATOR_STARTED_STATE:
+            return state
+        # ZDO_STARTUP_FROM_APP, payload StartDelay(uint16 LE) = 0
+        self.request(MT_ZDO, ZDO_STARTUP_FROM_APP, b"\x00\x00", timeout=3.0)
+        deadline = time.time() + 5.0
+        while time.time() < deadline:
+            state = self.device_state()
+            if state == COORDINATOR_STARTED_STATE:
+                break
+            time.sleep(0.5)
+        return state
 
     def stop(self) -> None:
         """Close the serial port if open."""
@@ -225,9 +266,10 @@ class ZigbeeDriver(Driver):
     def coordinator_info(self) -> Dict[str, Any]:
         """UTIL_GET_DEVICE_INFO -> ieee, nwk, state (12 or 14 byte payloads)."""
         data = self.request(MT_UTIL, UTIL_GET_DEVICE_INFO)
-        if len(data) < 12:
+        if len(data) < 13:
             raise DriverError(f"short device info reply: {data.hex(' ')}")
-        state = data[11]
+        # devState lives at offset 12 (see device_state() - offset 11 is stale).
+        state = data[12]
         ieee = bytes(data[1:9])[::-1].hex(":")
         self._coordinator_ieee = ieee
         return {
