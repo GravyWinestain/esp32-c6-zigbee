@@ -1,0 +1,503 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Zigbee IoT Hub</title>
+<style>
+  :root {
+    --bg: #14161a; --panel: #1c1f26; --panel2: #232733;
+    --fg: #e6e8ee; --dim: #8b93a7; --line: #2b3040;
+    --accent: #6aa6ff; --ok: #4ade80; --warn: #fbbf24; --bad: #f87171;
+  }
+  * { box-sizing: border-box; }
+  body {
+    margin: 0; background: var(--bg); color: var(--fg);
+    font: 14px/1.5 -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto,
+          Helvetica, Arial, sans-serif;
+  }
+  header {
+    display: flex; align-items: center; gap: 12px;
+    padding: 14px 22px; background: var(--panel);
+    border-bottom: 1px solid var(--line);
+    position: sticky; top: 0; z-index: 10;
+  }
+  header h1 { font-size: 16px; margin: 0; font-weight: 600; }
+  .dot {
+    width: 9px; height: 9px; border-radius: 50%;
+    background: var(--dim); flex: none;
+  }
+  .dot.live { background: var(--ok); box-shadow: 0 0 8px var(--ok); }
+  .dot.down { background: var(--bad); }
+  .spacer { flex: 1; }
+  .badge {
+    font-size: 12px; color: var(--dim); padding: 3px 9px;
+    border: 1px solid var(--line); border-radius: 999px;
+  }
+  nav {
+    display: flex; gap: 4px; padding: 10px 22px 0;
+    border-bottom: 1px solid var(--line); background: var(--panel);
+  }
+  nav button {
+    background: none; border: none; color: var(--dim); cursor: pointer;
+    padding: 9px 15px; font-size: 14px; border-bottom: 2px solid transparent;
+    font-family: inherit;
+  }
+  nav button:hover { color: var(--fg); }
+  nav button.active { color: var(--fg); border-bottom-color: var(--accent); }
+  main { padding: 22px; max-width: 1100px; }
+  .tab { display: none; }
+  .tab.active { display: block; }
+  .card {
+    background: var(--panel); border: 1px solid var(--line);
+    border-radius: 10px; padding: 16px 18px; margin-bottom: 16px;
+  }
+  .card h2 {
+    margin: 0 0 12px; font-size: 13px; text-transform: uppercase;
+    letter-spacing: .06em; color: var(--dim); font-weight: 600;
+  }
+  .row {
+    display: flex; justify-content: space-between; gap: 14px;
+    padding: 6px 0; border-bottom: 1px solid rgba(255,255,255,.04);
+    align-items: baseline;
+  }
+  .row:last-child { border-bottom: none; }
+  .row .k { color: var(--dim); flex: none; }
+  .row .v {
+    font-family: ui-monospace, Menlo, monospace; text-align: right;
+    word-break: break-all;
+  }
+  table { width: 100%; border-collapse: collapse; font-size: 13px; }
+  th {
+    text-align: left; color: var(--dim); font-weight: 600; font-size: 11px;
+    text-transform: uppercase; letter-spacing: .05em;
+    padding: 8px 10px; border-bottom: 1px solid var(--line);
+  }
+  td { padding: 9px 10px; border-bottom: 1px solid rgba(255,255,255,.04); }
+  tr:last-child td { border-bottom: none; }
+  td.mono { font-family: ui-monospace, Menlo, monospace; font-size: 12px; }
+  .pill {
+    display: inline-block; padding: 2px 8px; border-radius: 999px;
+    font-size: 11px; border: 1px solid var(--line); color: var(--dim);
+  }
+  .pill.coordinator { color: var(--accent); border-color: var(--accent); }
+  .pill.online { color: var(--ok); border-color: var(--ok); }
+  .pill.offline { color: var(--dim); }
+  button.btn {
+    background: var(--panel2); color: var(--fg); border: 1px solid var(--line);
+    border-radius: 7px; padding: 8px 14px; cursor: pointer;
+    font-size: 13px; font-family: inherit;
+  }
+  button.btn:hover { border-color: var(--accent); color: var(--accent); }
+  button.btn.primary { background: var(--accent); color: #0b1220; border-color: var(--accent); font-weight: 600; }
+  button.btn.primary:hover { filter: brightness(1.1); color: #0b1220; }
+  button.btn.danger:hover { border-color: var(--bad); color: var(--bad); }
+  button.btn:disabled { opacity: .45; cursor: not-allowed; }
+  .actions { display: flex; gap: 8px; flex-wrap: wrap; margin-top: 12px; }
+  input[type=text], input[type=number], select {
+    background: var(--bg); color: var(--fg); border: 1px solid var(--line);
+    border-radius: 7px; padding: 8px 11px; font-size: 13px; width: 100%;
+    font-family: inherit;
+  }
+  label { display: block; color: var(--dim); font-size: 12px; margin-bottom: 5px; }
+  .field { margin-bottom: 13px; }
+  .grid2 { display: grid; grid-template-columns: 1fr 1fr; gap: 13px; }
+  .msg {
+    margin-top: 12px; padding: 10px 13px; border-radius: 7px; font-size: 13px;
+    display: none; white-space: pre-wrap;
+  }
+  .msg.show { display: block; }
+  .msg.ok { background: rgba(74,222,128,.1); border: 1px solid rgba(74,222,128,.3); color: var(--ok); }
+  .msg.err { background: rgba(248,113,113,.1); border: 1px solid rgba(248,113,113,.3); color: var(--bad); }
+  .countdown {
+    font-family: ui-monospace, Menlo, monospace; font-size: 26px;
+    color: var(--accent); text-align: center; padding: 14px 0;
+  }
+  pre.log {
+    background: #0f1116; border: 1px solid var(--line); border-radius: 8px;
+    padding: 12px; font-size: 11.5px; max-height: 320px; overflow: auto;
+    font-family: ui-monospace, Menlo, monospace; color: var(--dim); margin: 0;
+  }
+  footer {
+    padding: 16px 22px; color: var(--dim); font-size: 12px;
+    border-top: 1px solid var(--line); margin-top: 26px;
+  }
+  .muted { color: var(--dim); font-size: 13px; }
+</style>
+</head>
+<body>
+<header>
+  <span class="dot" id="statusDot"></span>
+  <h1>Zigbee IoT Hub</h1>
+  <span class="spacer"></span>
+  <span class="badge" id="hubBadge">connecting…</span>
+</header>
+
+<nav>
+  <button class="active" data-tab="devices">Devices</button>
+  <button data-tab="add">Add device</button>
+  <button data-tab="events">Events</button>
+  <button data-tab="coordinator">Coordinator</button>
+</nav>
+
+<main>
+  <!-- DEVICES -->
+  <section class="tab active" id="tab-devices">
+    <div class="card">
+      <h2>Registered devices</h2>
+      <table>
+        <thead>
+          <tr>
+            <th>Name</th><th>IEEE</th><th>Type</th><th>Driver</th>
+            <th>State</th><th></th>
+          </tr>
+        </thead>
+        <tbody id="deviceRows">
+          <tr><td colspan="6" class="muted">Loading…</td></tr>
+        </tbody>
+      </table>
+      <div class="actions">
+        <button class="btn" id="refreshDevices">Refresh</button>
+        <button class="btn" id="reconcile">Poll drivers now</button>
+      </div>
+      <div class="msg" id="devMsg"></div>
+    </div>
+  </section>
+
+  <!-- ADD DEVICE -->
+  <section class="tab" id="tab-add">
+    <div class="card">
+      <h2>Add a new device</h2>
+      <p class="muted">
+        Put the device into pairing mode, then open the network below. The
+        hub polls every 10&nbsp;s and will register the device automatically
+        once it joins.
+      </p>
+      <div class="actions">
+        <button class="btn primary" id="permitOn">Open network (180 s)</button>
+        <button class="btn" id="permitOff">Close network</button>
+      </div>
+      <div class="countdown" id="permitCountdown">network closed</div>
+      <div class="msg" id="addMsg"></div>
+    </div>
+
+    <div class="card">
+      <h2>Or register manually</h2>
+      <p class="muted">For devices a driver cannot enumerate.</p>
+      <div class="grid2">
+        <div class="field">
+          <label for="mIeee">IEEE address</label>
+          <input type="text" id="mIeee" placeholder="00:12:4b:00:39:29:7e:c6">
+        </div>
+        <div class="field">
+          <label for="mName">Friendly name</label>
+          <input type="text" id="mName" placeholder="Hallway lamp">
+        </div>
+      </div>
+      <div class="grid2">
+        <div class="field">
+          <label for="mModel">Model</label>
+          <input type="text" id="mModel" placeholder="HA_on_off_light">
+        </div>
+        <div class="field">
+          <label for="mVendor">Vendor</label>
+          <input type="text" id="mVendor" placeholder="Espressif">
+        </div>
+      </div>
+      <div class="field">
+        <label for="mType">Node type</label>
+        <select id="mType">
+          <option value="enddevice">End device</option>
+          <option value="router">Router</option>
+          <option value="coordinator">Coordinator</option>
+        </select>
+      </div>
+      <div class="actions">
+        <button class="btn" id="manualAdd">Register device</button>
+      </div>
+      <div class="msg" id="manMsg"></div>
+    </div>
+  </section>
+
+  <!-- EVENTS -->
+  <section class="tab" id="tab-events">
+    <div class="card">
+      <h2>Event journal</h2>
+      <table>
+        <thead>
+          <tr><th>Time</th><th>Kind</th><th>Device</th><th>Detail</th></tr>
+        </thead>
+        <tbody id="eventRows">
+          <tr><td colspan="4" class="muted">Loading…</td></tr>
+        </tbody>
+      </table>
+      <div class="actions">
+        <button class="btn" id="refreshEvents">Refresh</button>
+      </div>
+    </div>
+  </section>
+
+  <!-- COORDINATOR -->
+  <section class="tab" id="tab-coordinator">
+    <div class="card">
+      <h2>Coordinator radio</h2>
+      <div id="coordInfo"><span class="muted">Loading…</span></div>
+      <div class="actions">
+        <button class="btn" id="refreshCoord">Refresh</button>
+      </div>
+    </div>
+    <div class="card">
+      <h2>Raw frame log (ZNP)</h2>
+      <pre class="log" id="rawLog">enable tracing to capture frames</pre>
+    </div>
+  </section>
+</main>
+
+<footer>
+  Zigbee IoT Hub v1.0.0 &middot; Sonoff ZBDongle-P (CC2652P) coordinator &middot;
+  API at <span class="mono">/api/hub</span> &middot; <span id="footTime"></span>
+</footer>
+
+<script>
+"use strict";
+
+const $ = (id) => document.getElementById(id);
+
+function showMsg(el, text, ok) {
+  el.textContent = text;
+  el.className = "msg show " + (ok ? "ok" : "err");
+  window.setTimeout(() => el.classList.remove("show"), 6000);
+}
+
+async function api(path, opts) {
+  const r = await fetch(path, opts);
+  let body;
+  try { body = await r.json(); } catch (e) { body = { ok: false, error: r.statusText }; }
+  if (!r.ok && body.ok === undefined) body.ok = false;
+  return body;
+}
+
+// -- tabs ------------------------------------------------------------------
+
+document.querySelectorAll("nav button").forEach((b) => {
+  b.addEventListener("click", () => {
+    document.querySelectorAll("nav button").forEach((x) => x.classList.remove("active"));
+    document.querySelectorAll(".tab").forEach((x) => x.classList.remove("active"));
+    b.classList.add("active");
+    $("tab-" + b.dataset.tab).classList.add("active");
+    if (b.dataset.tab === "events") loadEvents();
+    if (b.dataset.tab === "devices") loadDevices();
+    if (b.dataset.tab === "coordinator") loadCoordinator();
+  });
+});
+
+// -- hub status ------------------------------------------------------------
+
+async function loadHub() {
+  const d = await api("/api/hub");
+  const dot = $("statusDot"), badge = $("hubBadge");
+  if (d.ok && d.drivers && d.drivers.length) {
+    const online = d.drivers.some((x) => x.online);
+    dot.className = "dot " + (online ? "live" : "down");
+    badge.textContent = d.drivers.map((x) => x.name + (x.online ? " up" : " down")).join(", ");
+  } else {
+    dot.className = "dot down";
+    badge.textContent = "hub unavailable";
+  }
+  return d;
+}
+
+// -- devices ---------------------------------------------------------------
+
+async function loadDevices() {
+  const d = await api("/api/devices");
+  const tb = $("deviceRows");
+  if (!d.ok || !d.devices || !d.devices.length) {
+    tb.innerHTML = '<tr><td colspan="6" class="muted">No devices registered yet.</td></tr>';
+    return;
+  }
+  tb.innerHTML = d.devices.map((dev) => {
+    const name = dev.friendly_name || "<span class='muted'>unnamed</span>";
+    const stateKeys = Object.keys(dev.state || {});
+    const state = stateKeys.length
+      ? stateKeys.map((k) => k + ": " + dev.state[k]).join(" · ")
+      : "<span class='muted'>—</span>";
+    return `<tr>
+      <td>${name}</td>
+      <td class="mono">${dev.ieee}</td>
+      <td><span class="pill ${dev.node_type === 'coordinator' ? 'coordinator' : ''}">${dev.node_type || '?'}</span></td>
+      <td class="mono">${dev.driver}</td>
+      <td class="mono">${state}</td>
+      <td>
+        <button class="btn" data-rename="${dev.ieee}">Rename</button>
+        <button class="btn danger" data-del="${dev.ieee}">Remove</button>
+      </td>
+    </tr>`;
+  }).join("");
+
+  tb.querySelectorAll("[data-rename]").forEach((b) => {
+    b.addEventListener("click", async () => {
+      const ieee = b.dataset.rename;
+      const name = window.prompt("Friendly name for " + ieee + ":");
+      if (!name) return;
+      const r = await api("/api/devices/" + encodeURIComponent(ieee), {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ friendly_name: name }),
+      });
+      showMsg($("devMsg"), r.ok ? "Renamed." : ("Failed: " + r.error), r.ok);
+      loadDevices();
+    });
+  });
+  tb.querySelectorAll("[data-del]").forEach((b) => {
+    b.addEventListener("click", async () => {
+      const ieee = b.dataset.del;
+      if (!window.confirm("Remove " + ieee + " from the network and registry?")) return;
+      const r = await api("/api/devices/" + encodeURIComponent(ieee), { method: "DELETE" });
+      showMsg($("devMsg"), r.ok ? "Removed." : ("Failed: " + r.error), r.ok);
+      loadDevices();
+    });
+  });
+}
+
+// -- add device ------------------------------------------------------------
+
+let permitTimer = null;
+
+async function loadPermit() {
+  const d = await api("/api/commission");
+  const cd = $("permitCountdown");
+  if (d.ok && d.open) {
+    let left = d.seconds_remaining;
+    $("permitOn").disabled = true;
+    clearInterval(permitTimer);
+    const tick = () => {
+      cd.textContent = "network OPEN · " + left + " s remaining";
+      if (left-- <= 0) {
+        clearInterval(permitTimer);
+        cd.textContent = "network closed";
+        $("permitOn").disabled = false;
+      }
+    };
+    tick();
+    permitTimer = setInterval(tick, 1000);
+  } else {
+    cd.textContent = "network closed";
+    $("permitOn").disabled = false;
+  }
+}
+
+$("permitOn").addEventListener("click", async () => {
+  const r = await api("/api/commission", {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ seconds: 180 }),
+  });
+  if (r.ok) {
+    showMsg($("addMsg"), "Network open for 180 s. Now put the device into pairing mode.", true);
+  } else {
+    showMsg($("addMsg"), "Could not open network: " + r.error, false);
+  }
+  loadPermit();
+});
+
+$("permitOff").addEventListener("click", async () => {
+  const r = await api("/api/commission", {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ seconds: 0 }),
+  });
+  showMsg($("addMsg"), r.ok ? "Network closed." : ("Failed: " + r.error), r.ok);
+  loadPermit();
+});
+
+$("manualAdd").addEventListener("click", async () => {
+  const ieee = $("mIeee").value.trim();
+  if (!ieee) { showMsg($("manMsg"), "IEEE address is required.", false); return; }
+  const r = await api("/api/devices", {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({
+      ieee: ieee,
+      friendly_name: $("mName").value.trim() || null,
+      model: $("mModel").value.trim() || null,
+      vendor: $("mVendor").value.trim() || null,
+      node_type: $("mType").value,
+      driver: "zigbee",
+    }),
+  });
+  showMsg($("manMsg"), r.ok ? "Registered." : ("Failed: " + r.error), r.ok);
+  if (r.ok) { $("mIeee").value = $("mName").value = ""; }
+});
+
+// -- events ----------------------------------------------------------------
+
+async function loadEvents() {
+  const d = await api("/api/events?limit=100");
+  const tb = $("eventRows");
+  if (!d.ok || !d.events || !d.events.length) {
+    tb.innerHTML = '<tr><td colspan="4" class="muted">No events yet.</td></tr>';
+    return;
+  }
+  tb.innerHTML = d.events.map((e) => `<tr>
+    <td class="mono">${(e.ts || "").replace("T", " ").replace("+00:00", "Z")}</td>
+    <td><span class="pill">${e.kind}</span></td>
+    <td class="mono">${e.ieee || "—"}</td>
+    <td class="mono">${JSON.stringify(e.payload)}</td>
+  </tr>`).join("");
+}
+
+// -- coordinator -----------------------------------------------------------
+
+async function loadCoordinator() {
+  const d = await api("/api/hub");
+  const box = $("coordInfo");
+  if (!d.ok || !d.drivers || !d.drivers.length) {
+    box.innerHTML = "<span class='muted'>No driver.</span>";
+    return;
+  }
+  const drv = d.drivers[0];
+  const rows = [];
+  const add = (k, v) => rows.push(
+    `<div class="row"><span class="k">${k}</span><span class="v">${v}</span></div>`);
+  add("Driver", drv.name);
+  add("Serial port", drv.port);
+  add("Online", drv.online ? "yes" : "no");
+  if (drv.error) add("Error", drv.error);
+  if (drv.firmware) {
+    const f = drv.firmware;
+    add("Firmware revision", f.revision);
+    add("Z-Stack", f.zstack_version);
+    add("Product", f.product_name);
+  }
+  if (drv.coordinator) {
+    const c = drv.coordinator;
+    add("IEEE address", c.ieee_address);
+    add("Short address", c.short_address);
+    add("Network state", c.state);
+  }
+  box.innerHTML = rows.join("");
+}
+
+// -- wire up ---------------------------------------------------------------
+
+$("refreshDevices").addEventListener("click", loadDevices);
+$("refreshEvents").addEventListener("click", loadEvents);
+$("refreshCoord").addEventListener("click", loadCoordinator);
+$("reconcile").addEventListener("click", async () => {
+  const r = await api("/api/reconcile", { method: "POST" });
+  showMsg($("devMsg"),
+    r.ok ? ("Polled drivers, " + r.nodes_seen + " node(s) seen.") : ("Failed: " + r.error),
+    r.ok);
+  loadDevices();
+});
+
+function stamp() {
+  $("footTime").textContent = "updated " + new Date().toLocaleTimeString();
+}
+
+loadHub(); loadDevices(); loadPermit(); stamp();
+setInterval(() => { loadHub(); stamp(); }, 15000);
+</script>
+</body>
+</html>

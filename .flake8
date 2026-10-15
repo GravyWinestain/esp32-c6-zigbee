@@ -1,0 +1,6 @@
+[flake8]
+max-line-length = 100
+# E203: black formats slices as "a[1 : 2]" but flake8 wants "a[1:2]".
+# E501 is handled by max-line-length above.
+extend-ignore = E203
+exclude = .venv,build,dist,__pycache__
