@@ -14,12 +14,10 @@ Run:  python3 dongle_web.py
 
 from __future__ import annotations
 
-import asyncio
 import datetime
 import threading
 import time
 from collections import deque
-from pathlib import Path
 from typing import Any, Deque, Dict, Optional
 
 import serial
@@ -29,7 +27,7 @@ from pydantic import BaseModel
 
 APP_VERSION = "0.1.0"
 APP_COPYRIGHT = "(c) GnomeWorx 2026"
-DEFAULT_PORT = "/dev/ttyUSB0"
+DEFAULT_PORT = "/dev/zigbee-coordinator"
 BAUD = 115200
 
 MT_SYS = 0x41
@@ -92,8 +90,9 @@ class Znp:
             self._ser.close()
             dbg("closed serial port")
 
-    def request(self, mt: int, cmd: int, payload: bytes = b"",
-                timeout: float = 1.5) -> bytes:
+    def request(
+        self, mt: int, cmd: int, payload: bytes = b"", timeout: float = 1.5
+    ) -> bytes:
         """Send a request and return the matching SRSP payload (after status)."""
         frame = _unpi(mt, cmd, payload)
         with self._lock:
@@ -117,7 +116,7 @@ class Znp:
                             break
                         mt_r = buf[idx + 2]
                         cmd_r = buf[idx + 3]
-                        data = bytes(buf[idx + 4:idx + 4 + length])
+                        data = bytes(buf[idx + 4 : idx + 4 + length])
                         if mt_r == (mt | 0x20) and cmd_r == cmd:
                             dbg(f"RX {bytes(buf[idx:idx+4+length+1]).hex(' ')}")
                             return data
@@ -151,11 +150,14 @@ class Znp:
             "revision": revision,
             "revision_text": (
                 f"{revision // 10000:04d}-{revision // 100 % 100:02d}-"
-                f"{revision % 100:02d}" if revision > 9999999 else str(revision)
+                f"{revision % 100:02d}"
+                if revision > 9999999
+                else str(revision)
             ),
             "zstack_version": f"{data[2]}.{data[3]}.{data[4]}",
-            "product_name": {1: "Coordinator", 2: "Router", 0: "End device"}
-            .get(data[1], f"unknown ({data[1]})"),
+            "product_name": {1: "Coordinator", 2: "Router", 0: "End device"}.get(
+                data[1], f"unknown ({data[1]})"
+            ),
         }
 
     def device_info(self) -> Dict[str, Any]:
@@ -285,8 +287,9 @@ def api_debug_logs() -> JSONResponse:
 @app.get("/", response_class=HTMLResponse)
 def index() -> HTMLResponse:
     """Serve the single-page panel."""
-    return HTMLResponse(PAGE.replace("__VERSION__", APP_VERSION)
-                        .replace("__COPYRIGHT__", APP_COPYRIGHT))
+    return HTMLResponse(
+        PAGE.replace("__VERSION__", APP_VERSION).replace("__COPYRIGHT__", APP_COPYRIGHT)
+    )
 
 
 # --------------------------------------------------------------------- HTML

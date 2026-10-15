@@ -28,7 +28,7 @@ from hub.api import build_router
 from hub.drivers.zigbee import ZigbeeDriver
 
 PORT = int(os.environ.get("HUB_PORT", "8001"))
-SERIAL_PORT = os.environ.get("ZIGBEE_PORT", "/dev/ttyUSB0")
+SERIAL_PORT = os.environ.get("ZIGBEE_PORT", "/dev/zigbee-coordinator")
 
 logging.basicConfig(
     level=logging.INFO,

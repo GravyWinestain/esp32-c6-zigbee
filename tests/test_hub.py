@@ -465,3 +465,37 @@ def test_permit_join_duration_is_clamped_below_0xff() -> None:
 
     driver.permit_join(9999)
     assert captured["payload"][3] == 0xFE
+
+
+def test_dev_states_table_matches_zigpy_enum() -> None:
+    """Pin the device-state table to zigpy_znp.types.DeviceState.
+
+    A hand-written table drifted here and mislabelled the coordinator: index 8
+    was called "Coordinator running" when it actually means
+    StartingAsCoordinator, and 9 (StartedAsCoordinator) was labelled
+    "Router running". That made a stalled bring-up read as success. Deriving
+    the labels from the enum keeps the two in step.
+    """
+    from hub.drivers.zigbee import DEV_STATES, COORDINATOR_STARTED_STATE
+    from zigpy_znp.types import DeviceState
+
+    for member in DeviceState:
+        assert (
+            member.value in DEV_STATES
+        ), f"device state {member.value} ({member.name}) missing from DEV_STATES"
+
+    # The two states that matter for bring-up, spelled out explicitly.
+    assert DEV_STATES[8].lower() == "starting as coordinator"
+    assert DEV_STATES[9].lower() == "started as coordinator"
+    assert COORDINATOR_STARTED_STATE == DeviceState.StartedAsCoordinator.value == 9
+
+
+def test_permit_join_requires_the_coordinator_started_state() -> None:
+    """Permit-join must only be attempted from StartedAsCoordinator (9).
+
+    Issuing it earlier returns ZG_NWK_INVALID_REQUEST (0xC2) because the stack
+    has no network to open yet.
+    """
+    from hub.drivers.zigbee import COORDINATOR_STARTED_STATE
+
+    assert COORDINATOR_STARTED_STATE == 9

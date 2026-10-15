@@ -54,19 +54,33 @@ ZDO_STARTUP_FROM_APP = 0x40
 ZDO_MGMT_PERMIT_JOIN_REQ = 0x36
 ZDO_MGMT_LEAVE_REQ = 0x34
 
-# Coordinator state codes reported by UTIL_GET_DEVICE_INFO.
+# Device state codes reported by UTIL_GET_DEVICE_INFO.
+# Values match zigpy_znp.types.DeviceState exactly; do not hand-edit these
+# offsets. A wrong table makes a healthy coordinator look dead: index 8 is
+# StartingAsCoordinator and 9 is StartedAsCoordinator, so treating 8 as
+# "running" reports success while the network is still coming up.
 DEV_STATES = {
     0: "Initialised - not started",
-    1: "Connecting to network",
-    2: "Connected",
-    3: "Authenticating",
-    4: "Authentication complete",
-    5: "Network joined",
-    6: "Rejoining network",
-    7: "Coordinator (no network)",
-    8: "Coordinator running",
-    9: "Router running",
+    1: "Initialised - not connected",
+    2: "Discovering PANs",
+    3: "Joining",
+    4: "Rejoining - secure scan, current channel",
+    5: "Joined - not authenticated",
+    6: "Joined as end device",
+    7: "Joined as router",
+    8: "Starting as coordinator",
+    9: "Started as coordinator",
+    10: "Lost parent",
+    11: "Sending keep-alive to parent",
+    12: "Backoff before rejoin",
+    13: "Rejoin - secure scan, all channels",
+    14: "Rejoin - insecure scan, current channel",
+    15: "Rejoin - insecure scan, all channels",
 }
+
+# The states in which a coordinator genuinely owns a live network.
+COORDINATOR_STARTED_STATE = 9
+COORDINATOR_STARTING_STATE = 8
 
 
 def _unpi(mt: int, cmd: int, payload: bytes = b"") -> bytes:

@@ -1,0 +1,8 @@
+# Sonoff ZBDongle-P (CC2652P, CP210x) -> stable /dev/zigbee-coordinator
+#
+# The port path moves between ttyUSB0/ttyUSB1/... depending on which USB
+# controller the dongle is plugged into. A symlink keyed on the device's own
+# serial number keeps scripts working regardless of the physical port.
+#
+# Serial is the CP210x's factory ID, NOT the Zigbee IEEE address.
+SUBSYSTEM=="tty", ATTRS{idVendor}=="10c4", ATTRS{idProduct}=="ea60", ATTRS{serial}=="*", SYMLINK+="zigbee-coordinator", MODE="0660", GROUP="dialout"
